@@ -1,4 +1,4 @@
 build: main.c
-	gcc -o main main.c -Wall
+	gcc -o ansh main.c -Wall
 clean:
-	rm main
+	rm ansh
