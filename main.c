@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,20 +34,37 @@ int main(int argc, char *argv[]) {
 
     pid_t child;
     switch (child = fork()) {
-      case -1:
-        errExit("fork");
-      case 0:
-        if (exec_child(cmd) == -1) {
-          errExit("exec_child");
-        }
-      default:
-        if (waitpid(child, NULL, 0) == -1) {
-          errExit("waitpid");
-        }
+    case -1:
+      errExit("fork");
+    case 0:
+      if (exec_child(cmd) == -1) {
+        errExit("exec_child");
+      }
+    default:
+      if (waitpid(child, NULL, 0) == -1) {
+        errExit("waitpid");
+      }
     }
   }
 
   return 0;
+}
+
+char *trim(char *s) {
+  while (isspace(*s))
+    s++;
+
+  if (*s == '\0') {
+    return s;
+  }
+
+  char *end = s + strlen(s) - 1;
+  while (end > s && isspace(*end))
+    end--;
+
+  end[1] = '\0';
+
+  return s;
 }
 
 int exec_child(char *cmd) {
@@ -54,13 +72,13 @@ int exec_child(char *cmd) {
   char *tokens[BUFSIZ];
   char **token_ptr = tokens;
 
-  while ((*token_ptr = strsep(&cmd, " ")) != NULL) {
+  while ((*token_ptr = strsep(&cmd, "\t")) != NULL) {
     if (**token_ptr != '\0') {
+      *token_ptr = trim(*token_ptr);
       token_ptr++;
       i++;
     }
   }
-  tokens[i] = NULL;
 
   char **path;
   char *base_cmd = tokens[0];
@@ -77,13 +95,10 @@ int exec_child(char *cmd) {
       continue;
     }
 
-    if (execv(cmd_path, tokens) == -1) {
-      perror("exec_child");
-      free(cmd_path);
-      return -1;
-    }
-
+    execv(cmd_path, tokens);
+    perror("exec_child");
     free(cmd_path);
+    return -1;
   }
 
   fprintf(stderr, "%s: command not found\n", base_cmd);
