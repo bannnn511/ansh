@@ -1,17 +1,26 @@
 #include <ctype.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#define errExit(msg)                                                           \
-  do {                                                                         \
-    perror(msg);                                                               \
-    exit(EXIT_FAILURE);                                                        \
+#define errExit(msg)    \
+  do {                  \
+    perror(msg);        \
+    exit(EXIT_FAILURE); \
   } while (0)
 
 #define MAX_CMD_LEN 200
+#define RED "\x1B[31m"
+#define GRN "\x1B[32m"
+#define YEL "\x1B[33m"
+#define BLU "\x1B[34m"
+#define MAG "\x1B[35m"
+#define CYN "\x1B[36m"
+#define WHT "\x1B[37m"
+#define RESET "\x1B[0m"
 
 /* Debug mode will print prompt to command line */
 int _DEBUG = 0;
@@ -21,6 +30,8 @@ int _NOFORK = 0;
 
 /* Array of paths where the shell should look for commands */
 char *SHELL_PATH[BUFSIZ] = {"/bin/", "/usr/bin/", NULL};
+
+char CURRENT_DIR[PATH_MAX];
 
 /* Length of the SHELL_PATH array */
 
@@ -54,13 +65,13 @@ int parse_input(char **tokens, char *cmd) {
   int i = 0;
   while ((token = strsep(&cmd, " ")) != NULL) {
     if (*token == '\0') {
-      continue;
+      break;
     }
     tokens[i] = trim(token);
     i++;
   }
 
-  return i;
+  return i - 1;
 }
 
 int exec_cmd(char *cmd) {
@@ -100,6 +111,37 @@ void update_path(char **paths) {
   }
 }
 
+int parse_dir(char **tokens, char *cmd) {
+  char *token;
+  int i = 0;
+  while ((token = strsep(&cmd, "/")) != NULL) {
+    if (*token == '\0') {
+      continue;
+      ;
+    }
+    tokens[i++] = trim(token);
+  }
+
+  return i - 1;
+}
+
+void print_prompt() {
+  char **dirs = malloc(sizeof(char *) * BUFSIZ);
+  getcwd(CURRENT_DIR, PATH_MAX);
+  const int i = parse_dir(dirs, CURRENT_DIR);
+  if (i > 1) {
+    printf(BLU "%s/%s\n" RESET, dirs[i - 1], dirs[i]);
+    printf(GRN "ansh-> " RESET);
+  } else if (i > 0) {
+    printf(BLU "%s\n" RESET, dirs[i]);
+    printf(GRN "ansh-> " RESET);
+  } else {
+    printf(BLU "/🔒\n" RESET);
+    printf(GRN "ansh->%s" RESET, "");
+  }
+  free(dirs);
+}
+
 int main(int const argc, char *argv[]) {
   printf("Welcome to ansh shell, the interactive friendly shell by An\n");
   char cmd[MAX_CMD_LEN];
@@ -126,13 +168,12 @@ int main(int const argc, char *argv[]) {
   }
 
   for (;;) {
-    printf("ansh-> ");
+    print_prompt();
     fflush(stdout);
 
     if (fgets(cmd, MAX_CMD_LEN, stdin) == NULL) {
       break;
     }
-    print_debug(cmd);
 
     if (strncmp(cmd, "exit", 4) == 0) {
       return 0;
@@ -163,17 +204,18 @@ int main(int const argc, char *argv[]) {
     pid_t child;
     int child_pid = 0;
     switch (child = fork()) {
-    case -1:
-      errExit("fork");
-    case 0:
-      child_pid = getpid();
-      result = exec_cmd(cmd);
-    default:
-      waitpid(child, NULL, 0);
-      if (result == -1) {
-        fprintf(stderr, "ansh: Unknown command: %s\n", cmd);
-        kill(child_pid, SIGTERM);
-      }
+      case -1:
+        errExit("fork");
+      case 0:
+        child_pid = getpid();
+        result = exec_cmd(cmd);
+      default:
+        waitpid(child, NULL, 0);
+        if (result == -1) {
+          fprintf(stderr, "ansh: Unknown command: %s\n", cmd);
+          kill(child_pid, SIGTERM);
+        }
+        printf("\n");
     }
   }
 
