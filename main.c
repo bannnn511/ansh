@@ -21,12 +21,12 @@ int _DEBUG = 0;
 int _NOFORK = 0;
 
 /* Array of paths where the shell should look for commands */
-char* SHELL_PATH[BUFSIZ] = {"/bin/", "/usr/bin/", NULL};
+char *SHELL_PATH[BUFSIZ] = {"/bin/", "/usr/bin/", NULL};
 
 /* Length of the SHELL_PATH array */
 int SHELL_PATH_LEN = 2;
 
-char* trim(char* s)
+char *trim(char *s)
 {
 	while (isspace(*s))
 	{
@@ -38,7 +38,7 @@ char* trim(char* s)
 		return s;
 	}
 
-	char* end = s + strlen(s) - 1;
+	char *end = s + strlen(s) - 1;
 	while (end > s && isspace(*end))
 	{
 		end--;
@@ -48,7 +48,7 @@ char* trim(char* s)
 	return s;
 }
 
-void print_debug(char* msg)
+void print_debug(char *msg)
 {
 	if (_DEBUG == 0)
 	{
@@ -57,9 +57,9 @@ void print_debug(char* msg)
 	printf("ansh(debug)-> %s\n", msg);
 }
 
-int parse_input(char** tokens, char* cmd)
+int parse_input(char **tokens, char *cmd)
 {
-	char* token;
+	char *token;
 	int i = 0;
 	while ((token = strsep(&cmd, " ")) != NULL)
 	{
@@ -74,15 +74,15 @@ int parse_input(char** tokens, char* cmd)
 	return i;
 }
 
-int exec_cmd(char* cmd)
+int exec_cmd(char *cmd)
 {
-	char** tokens = malloc(sizeof(char*) * BUFSIZ);
+	char **tokens = malloc(sizeof(char *) * BUFSIZ);
 	parse_input(tokens, cmd);
 
-	char* base_cmd = tokens[0];
-	for (char** path = SHELL_PATH; *path; path++)
+	char *base_cmd = tokens[0];
+	for (char **path = SHELL_PATH; *path; path++)
 	{
-		char* cmd_path = malloc(strlen(*path) + strlen(base_cmd) + 1);
+		char *cmd_path = malloc(strlen(*path) + strlen(base_cmd) + 1);
 		if (cmd_path == NULL)
 		{
 			errExit("malloc");
@@ -107,18 +107,18 @@ int exec_cmd(char* cmd)
 }
 
 /* Overwrite the SHELL_PATH lookup with paths */
-void update_path(char** paths)
+void update_path(char **paths)
 {
 	*SHELL_PATH = NULL;
 	SHELL_PATH_LEN = 0;
-	for (char** path = paths; *path; path++)
+	for (char **path = paths; *path; path++)
 	{
 		*SHELL_PATH = *path;
 		(*SHELL_PATH)++;
 	}
 }
 
-int main(int const argc, char* argv[])
+int main(int const argc, char *argv[])
 {
 	printf("Welcome to ansh shell, the interactive friendly shell by An\n");
 	char cmd[MAX_CMD_LEN];
@@ -168,7 +168,7 @@ int main(int const argc, char* argv[])
 
 		if (strncmp(cmd, "cd", 2) == 0)
 		{
-			char* dir = cmd + 3;
+			char *dir = cmd + 3;
 			if (*dir == '\0')
 			{
 				fprintf(stderr, "cd: missing operand\n");
@@ -184,9 +184,8 @@ int main(int const argc, char* argv[])
 
 		if (strncmp(cmd, "path", 4) == 0)
 		{
-			print_debug("path command");
-			char** paths = malloc(sizeof(char*) * BUFSIZ);
-			char* path = cmd + 5;
+			char **paths = malloc(sizeof(char *) * BUFSIZ);
+			char *path = cmd + 5;
 			parse_input(paths, path);
 			update_path(paths);
 			continue;
