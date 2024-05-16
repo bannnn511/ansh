@@ -196,7 +196,6 @@ int main(int const argc, char *argv[]) {
         fprintf(stderr, "ansh: Unknown command: %s\n", cmd);
         kill(child_pid, SIGTERM);
       }
-      // printf("\n");
     }
   }
 

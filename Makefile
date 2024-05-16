@@ -1,8 +1,11 @@
 build-gcc: main.c
 	gcc -o ansh main.c parse.c -Wall -Werror
+init:
+	meson setup builddir
 build:
-	cd builddir && meson compile
+	meson compile -C builddir
 run:
 	./builddir/ansh
 clean:
 	rm ansh
+	rm -rf builddir
