@@ -1,4 +1,5 @@
 .idea
 *.dSYM
+.vscode
 main
 ansh
