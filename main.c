@@ -6,119 +6,32 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#define errExit(msg)                                                           \
-  do {                                                                         \
-    perror(msg);                                                               \
-    exit(EXIT_FAILURE);                                                        \
-  } while (0)
+#include "utils.h"
 
 #define MAX_CMD_LEN 200
-#define RED "\x1B[31m"
-#define GRN "\x1B[32m"
-#define YEL "\x1B[33m"
-#define BLU "\x1B[34m"
-#define MAG "\x1B[35m"
-#define CYN "\x1B[36m"
-#define WHT "\x1B[37m"
-#define RESET "\x1B[0m"
 
-/* Debug mode will print prompt to command line */
-int _DEBUG = 0;
+
+#define errExit(msg)                                                           \
+do {                                                                         \
+perror(msg);                                                               \
+exit(EXIT_FAILURE);                                                        \
+} while (0)
+
 
 /* No fork mode will run the command in the same process */
 int _NOFORK = 0;
 
+/* Execute mode will run hardcode command */
+int _EXEC = 0;
+
 /* Array of paths where the shell should look for commands */
 char *SHELL_PATH[BUFSIZ] = {"/bin/", "/usr/bin/", NULL};
 
-void print_debug(char *msg) {
-  if (_DEBUG == 0) {
-    return;
-  }
-  printf("ansh(debug)-> %s", msg);
-}
-
-void print_prompt() {
-  char **dirs = malloc(sizeof(char *) * BUFSIZ);
-  if (dirs == NULL) {
-    perror("malloc");
-    return;
-  }
-  char current_dir[PATH_MAX];
-
-  if (getwd(current_dir) == NULL) {
-    perror("getcwd");
-    free(dirs);
-    return;
-  }
-
-  const int i = parse_dir(dirs, current_dir);
-  if (i > 1) {
-    printf(BLU "%s/%s\n" RESET, dirs[i - 1], dirs[i]);
-    printf(GRN "ansh-> " RESET);
-  } else if (i > 0) {
-    printf(BLU "%s\n" RESET, dirs[i]);
-    printf(GRN "ansh-> " RESET);
-  } else {
-    printf(BLU "/🔒\n" RESET);
-    printf(GRN "ansh->%s" RESET, "");
-  }
-
-  free(dirs);
-}
-
-void print_simple_prompt() { printf(GRN "ansh-> " RESET); }
-
-/* Overwrite the SHELL_PATH lookup with paths */
-void update_path(char **paths) {
-  *SHELL_PATH = NULL;
-  for (char **path = paths; *path; path++) {
-    *SHELL_PATH = *path;
-    (*SHELL_PATH)++;
-  }
-}
-
-int exec_cmd(char *cmd) {
-  char **tokens = malloc(sizeof(char *) * BUFSIZ);
-  int i = parse_input(tokens, cmd);
-
-  const char *base_cmd = tokens[0];
-  for (char **path = SHELL_PATH; *path; path++) {
-    char *cmd_path = malloc(strlen(*path) + strlen(base_cmd) + 1);
-    if (cmd_path == NULL) {
-      errExit("malloc");
-    }
-    strcpy(cmd_path, *path);
-    strcat(cmd_path, base_cmd);
-
-    // check path accessibility
-    if (access(cmd_path, X_OK) == -1) {
-      char buffer[20];
-      sprintf(buffer, "%s\n", cmd_path);
-      print_debug(buffer);
-      free(cmd_path);
-      continue;
-    }
-
-    if (_DEBUG) {
-      char buffer[30];
-      sprintf(buffer, "tokens arguments: %d\n", i);
-      print_debug(buffer);
-    }
-
-    if (i == 0) {
-      tokens[0] = "";
-      tokens[1] = NULL;
-    }
-
-    execv(cmd_path, tokens);
-    perror("exec_child");
-    free(cmd_path);
-  }
-
-  return -1;
-}
+void print_prompt(void);
+void print_simple_prompt(void);
+void print_debug(char *msg);
+void update_path(char **paths);
+int exec_cmd(const char *cmd);
 
 int main(int const argc, char *argv[]) {
   printf("Welcome to ansh shell, the interactive friendly shell by An\n");
@@ -127,6 +40,12 @@ int main(int const argc, char *argv[]) {
   if (argc > 1) {
     if (strcmp(argv[1], "-d") == 0) {
       _DEBUG = 1;
+    }
+  }
+
+  if (argc > 1) {
+    if (strcmp(argv[1], "-e") == 0) {
+      execl("/usr/bin/git", "git", "add", ".", NULL);
     }
   }
 
@@ -173,9 +92,9 @@ int main(int const argc, char *argv[]) {
     }
 
     if (strncmp(cmd, "path", 4) == 0) {
-      char **paths = malloc(sizeof(char *) * BUFSIZ);
+      char **paths = calloc(BUFSIZ, sizeof(char *));
       char *path = cmd + 5;
-      parse_input(paths, path);
+      split_line(paths, path, " ");
       update_path(paths);
       continue;
     }
@@ -200,4 +119,106 @@ int main(int const argc, char *argv[]) {
   }
 
   return 0;
+}
+
+void print_prompt(void) {
+  char **dirs = calloc(BUFSIZ, sizeof(char *));
+  if (dirs == NULL) {
+    perror("calloc");
+    return;
+  }
+  char current_dir[PATH_MAX];
+
+  if (getwd(current_dir) == NULL) {
+    perror("getcwd");
+    free(dirs);
+    return;
+  }
+
+  const int i = split_line(dirs, current_dir, "/");
+  printf("\n");
+  if (i > 1) {
+    printf(BLU "%s/%s\n" RESET, dirs[i - 1], dirs[i]);
+    printf(GRN "ansh-> " RESET);
+  } else if (i > 0) {
+    printf(BLU "%s\n" RESET, dirs[i]);
+    printf(GRN "ansh-> " RESET);
+  } else {
+    printf(BLU "/🔒\n" RESET);
+    printf(GRN "ansh->%s" RESET, "");
+  }
+
+  free(dirs);
+}
+
+
+/* Overwrite the SHELL_PATH lookup with paths */
+void update_path(char **paths) {
+  *SHELL_PATH = NULL;
+  for (char **path = paths; *path; path++) {
+    *SHELL_PATH = *path;
+    (*SHELL_PATH)++;
+  }
+}
+
+int exec_cmd(const char *cmd) {
+  char **tokens = calloc(strlen(cmd), sizeof(char **));
+  if (tokens == NULL) {
+    errExit("calloc");
+  }
+  for (unsigned long i = 0; i < strlen(cmd); i++) {
+    tokens[i] = calloc(strlen(cmd), sizeof(char));
+    if (tokens[i] == NULL) {
+      errExit("calloc");
+    }
+  }
+  const int i = parse_input(tokens, cmd);
+  if (i == -1) {
+    errExit("parse input");
+  }
+
+  const char *base_cmd = tokens[0];
+  for (char **path = SHELL_PATH; *path; path++) {
+    char *cmd_path = calloc(
+        strlen(*path) + strlen(base_cmd) + 1,
+        sizeof(char)
+        );
+    if (cmd_path == NULL) {
+      errExit("calloc");
+    }
+    strcpy(cmd_path, *path);
+    strcat(cmd_path, base_cmd);
+
+    // check path accessibility
+    if (access(cmd_path, X_OK) == -1) {
+      char buffer[20];
+      sprintf(buffer, "%s\n", cmd_path);
+      print_debug(buffer);
+      free(cmd_path);
+      continue;
+    }
+
+    if (_DEBUG) {
+      char buffer[30];
+      sprintf(buffer, "tokens arguments: %d\n", i);
+      print_debug(buffer);
+    }
+
+    if (i == 0) {
+      tokens[0] = "";
+      tokens[1] = NULL;
+    }
+
+    print_debug("exec cmd\n");
+    execv(cmd_path, tokens);
+    free(cmd_path);
+    for (unsigned long j = 0; j < strlen(cmd); j++) {
+      free(tokens[j]);
+    }
+    perror("exec_child");
+  }
+
+  free(tokens);
+
+  return -1;
 }

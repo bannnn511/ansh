@@ -1,5 +1,5 @@
 build-gcc: main.c
-	gcc -o ansh main.c parse.c -Wall -Werror
+	gcc -o ansh main.c parse.c print.c -Wall -Werror
 init:
 	meson setup builddir
 build:
