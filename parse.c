@@ -87,6 +87,11 @@ int parse_input(char **buffers, const char *cmd) {
   char **tokens = malloc(sizeof(char *) * BUFSIZ);
   int i = split_line(tokens, commands[0], " ");
 
+  if (i == 0) {
+    tokens[0] = "";
+    tokens[1] = NULL;
+  }
+
   // copy tokens to buffers
   for (int j = 0; j <= i; j++) {
     strncpy(buffers[j], tokens[j], strlen(tokens[j]));
