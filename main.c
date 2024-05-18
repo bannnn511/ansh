@@ -56,6 +56,10 @@ int main(int const argc, char *argv[]) {
         break;
       }
       print_debug(cmd);
+      // skip empty command
+      if (strlen(cmd) == 1) {
+        continue;
+      }
       // remove new line
       if (cmd[strlen(cmd) - 1] == '\n') {
         cmd[strlen(cmd) - 1] = '\0';
@@ -174,7 +178,12 @@ int execute_command(char *tokens[]) {
     update_path(paths);
   }
 
-  print_debug("exec cmd\n");
+  char debug[BUFSIZ];
+  for (int i = 0; tokens[i] != NULL; i++) {
+    sprintf(debug, "%s\n", tokens[i]);
+    print_debug(debug);
+  }
+  print_debug(debug);
   int result = 0;
   pid_t child;
   int child_pid = 0;

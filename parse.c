@@ -69,11 +69,11 @@ int parse_input(char **buffers, const char *cmd) {
   strcpy(cmd_copy, cmd);
 
   // split command by quotes
-  char **commands = malloc(sizeof(char *) * BUFSIZ);
+  char **commands = calloc(BUFSIZ, sizeof(char *));
   split_line(commands, cmd_copy, "\"");
 
   // extract arguments
-  char *args = malloc(sizeof(char *) * BUFSIZ);
+  char *args = calloc(BUFSIZ, sizeof(char *));
   if (commands[1] != NULL && strlen(commands[1]) > 0) {
     if (extract_quoted_string(args, cmd) != 0) {
       char buffer[20];
@@ -84,13 +84,13 @@ int parse_input(char **buffers, const char *cmd) {
     }
   }
 
-  char **tokens = malloc(sizeof(char *) * BUFSIZ);
+  char **tokens = calloc(BUFSIZ, sizeof(char *));
   int i = split_line(tokens, commands[0], " ");
 
-  if (i == 0) {
-    tokens[0] = "";
-    tokens[1] = NULL;
-  }
+  // if (i == 0) {
+  //   tokens[0] = "";
+  //   tokens[1] = NULL;
+  // }
 
   // copy tokens to buffers
   for (int j = 0; j <= i; j++) {
