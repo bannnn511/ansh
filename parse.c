@@ -1,9 +1,9 @@
+#include "utils.h"
 #include <ctype.h>
 #include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "utils.h"
 
 int extract_quoted_string(char *buffer, const char *str) {
   regex_t regex;
@@ -18,7 +18,7 @@ int extract_quoted_string(char *buffer, const char *str) {
   if (regexec(&regex, str, 2, pmatch, 0) == 0) {
     const int start = pmatch[0].rm_so;
     const int end = pmatch[0].rm_eo;
-    strncpy(buffer, str+ start, end - start);
+    strncpy(buffer, str + start, end - start);
   } else {
     return -1;
   }
@@ -51,7 +51,8 @@ int split_line(char **tokens, char *cmd, const char *delim) {
   int i = 0;
   while ((token = strsep(&cmd, delim)) != NULL) {
     if (*token == '\0') {
-      continue;;
+      continue;
+      ;
     }
     tokens[i] = trim(token);
     i++;
@@ -87,11 +88,6 @@ int parse_input(char **buffers, const char *cmd) {
   char **tokens = calloc(BUFSIZ, sizeof(char *));
   int i = split_line(tokens, commands[0], " ");
 
-  // if (i == 0) {
-  //   tokens[0] = "";
-  //   tokens[1] = NULL;
-  // }
-
   // copy tokens to buffers
   for (int j = 0; j <= i; j++) {
     strncpy(buffers[j], tokens[j], strlen(tokens[j]));
@@ -108,5 +104,3 @@ int parse_input(char **buffers, const char *cmd) {
 
   return i;
 }
-
-

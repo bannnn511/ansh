@@ -8,6 +8,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef __unix__
+#include <sys/types.h>
+#include <sys/wait.h>
+#define PATH_MAX 1024 /* max bytes in pathname */
+#endif
+
 #define MAX_CMD_LEN 200
 
 #define errExit(msg)                                                           \
@@ -35,58 +41,69 @@ void update_path(char **paths);
 int execute_command(char *tokens[]);
 
 int main(int const argc, char *argv[]) {
-  printf("Welcome to ansh shell, the interactive friendly shell by An\n");
-
   if (argc > 1) {
     if (strcmp(argv[1], "-d") == 0) {
       _DEBUG = 1;
     } else {
-
       _INTERACTIVE_MODE = 0;
     }
   }
 
   if (_INTERACTIVE_MODE == 1) {
-    for (;;) {
-      char cmd[MAX_CMD_LEN];
+    printf("Welcome to ansh shell, the interactive friendly shell by An\n");
+  }
+
+  FILE *file;
+  if (_INTERACTIVE_MODE) {
+    file = stdin;
+  } else {
+    file = fopen(argv[1], "r");
+    if (file == NULL) {
+      fprintf(stderr, "error: No such file or directory");
+    }
+  }
+
+  for (;;) {
+    char cmd[MAX_CMD_LEN];
+    if (_INTERACTIVE_MODE == 1) {
       print_prompt();
-      fflush(stdout);
+    }
+    fflush(stdout);
 
-      if (fgets(cmd, MAX_CMD_LEN, stdin) == NULL) {
-        break;
-      }
-      print_debug(cmd);
-      // skip empty command
-      if (strlen(cmd) == 1) {
-        continue;
-      }
-      // remove new line
-      if (cmd[strlen(cmd) - 1] == '\n') {
-        cmd[strlen(cmd) - 1] = '\0';
-      }
+    if (fgets(cmd, MAX_CMD_LEN, file) == NULL) {
+      break;
+    }
+    print_debug(cmd);
+    // skip empty command
+    if (strlen(cmd) == 1) {
+      continue;
+    }
+    // remove new line
+    if (cmd[strlen(cmd) - 1] == '\n') {
+      cmd[strlen(cmd) - 1] = '\0';
+    }
 
-      char **tokens = calloc(strlen(cmd), sizeof(char **));
-      if (tokens == NULL) {
+    char **tokens = calloc(strlen(cmd), sizeof(char **));
+    if (tokens == NULL) {
+      errExit("calloc");
+    }
+    for (unsigned long i = 0; i < strlen(cmd); i++) {
+      tokens[i] = calloc(strlen(cmd), sizeof(char));
+      if (tokens[i] == NULL) {
         errExit("calloc");
       }
-      for (unsigned long i = 0; i < strlen(cmd); i++) {
-        tokens[i] = calloc(strlen(cmd), sizeof(char));
-        if (tokens[i] == NULL) {
-          errExit("calloc");
-        }
-      }
-      parse_input(tokens, cmd);
-      execute_command(tokens);
-
-      for (unsigned long j = 0; j < strlen(cmd); j++) {
-        free(tokens[j]);
-      }
-      free(tokens);
     }
-  } else {
-    /* Batch mode */
-    // TODO: batch mode
-    printf("file name is %s\n", argv[1]);
+    parse_input(tokens, cmd);
+    execute_command(tokens);
+
+    for (unsigned long j = 0; j < strlen(cmd); j++) {
+      free(tokens[j]);
+    }
+    free(tokens);
+  }
+
+  if (_INTERACTIVE_MODE == 0) {
+    fclose(file);
   }
 
   return 0;
@@ -100,7 +117,7 @@ void print_prompt(void) {
   }
   char current_dir[PATH_MAX];
 
-  if (getwd(current_dir) == NULL) {
+  if (getcwd(current_dir, PATH_MAX) == NULL) {
     perror("getcwd");
     free(dirs);
     return;
@@ -145,11 +162,6 @@ int search_path(char path[], const char *cmd) {
 }
 
 int execute_command(char *tokens[]) {
-
-  // if (i == -1) {
-  //   errExit("parse input");
-  // }
-
   char path[BUFSIZ];
   if (search_path(path, tokens[0]) == -1) {
     return -1;
