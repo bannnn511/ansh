@@ -18,7 +18,7 @@ int extract_quoted_string(char *buffer, const char *str) {
   if (regexec(&regex, str, 2, pmatch, 0) == 0) {
     const int start = pmatch[0].rm_so;
     const int end = pmatch[0].rm_eo;
-    strncpy(buffer, str + start, end - start);
+    strncpy(buffer, str + start+1, end - start-2); /* exclude quotes */
   } else {
     return -1;
   }
@@ -51,8 +51,7 @@ int split_line(char **tokens, char *cmd, const char *delim) {
   int i = 0;
   while ((token = strsep(&cmd, delim)) != NULL) {
     if (*token == '\0') {
-      continue;
-      ;
+      continue;;
     }
     tokens[i] = trim(token);
     i++;
