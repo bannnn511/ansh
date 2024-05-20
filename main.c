@@ -260,6 +260,8 @@ int execute_command(char *tokens[]) {
     saDefault.sa_handler = SIG_DFL;
     saDefault.sa_flags = 0;
     sigemptyset(&saDefault.sa_mask);
+
+    /* resets the dispositions to SIG_DFL */
     if (saOrigInt.sa_handler != SIG_IGN) {
       sigaction(SIGINT, &saDefault, NULL);
     }
@@ -273,16 +275,21 @@ int execute_command(char *tokens[]) {
     fprintf(stderr, "ansh: Unknown command: %s\n", tokens[0]);
     _exit(127);
   default:
-    if (waitpid(child, &status, 0) == -1) {
+    while (waitpid(child, &status, 0) == -1) {
       return -1;
     }
+    /*
+      system calls my report error code EINTR if a signal occured while system
+      call was inprogress
+      -> no error actually occurred -> retries the system call
+      */
     if (errno != EINTR) {
       status = -1;
       break;
     }
     print_debug("child done\n");
 
-    return status;
+    break;
   }
   /*
   ======================================
@@ -299,7 +306,7 @@ int execute_command(char *tokens[]) {
 
   errno = savedErrno;
 
-  return -1;
+  return status;
 }
 
 /*
