@@ -51,7 +51,8 @@ int split_line(char **tokens, char *cmd, const char *delim) {
   int i = 0;
   while ((token = strsep(&cmd, delim)) != NULL) {
     if (*token == '\0') {
-      continue;;
+      continue;
+      ;
     }
     tokens[i] = trim(token);
     i++;
@@ -117,9 +118,8 @@ int extract_output_file(char *file_name, const char *cmd) {
   if (regexec(&regex, cmd, 2, pmatch, 0) == 0) {
     const int start = pmatch[0].rm_so;
     const int end = pmatch[0].rm_eo;
-    printf("start: %d, end: %d\n", start, end);
     char buffer[end - start];
-    strncpy(buffer, cmd + start + 1, end - start+1);
+    strncpy(buffer, cmd + start + 1, end - start + 1);
     buffer[end - start] = '\0';
     strncpy(file_name, trim(buffer), strlen(buffer) + 1);
   } else {
