@@ -1,6 +1,7 @@
 #include "parse.h"
 #include "utils.h"
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
@@ -48,7 +49,7 @@ int main(int const argc, char *argv[]) {
     printf("Welcome to ansh shell, the interactive friendly shell by An\n");
   }
 
-  // file for batch mode
+  /* file for batch mode */
   FILE *file;
   if (_INTERACTIVE_MODE) {
     file = stdin;
@@ -59,7 +60,7 @@ int main(int const argc, char *argv[]) {
     }
   }
 
-  // file for output redirection
+  /* file for output redirection */
   FILE *out;
   int is_redirect = 0;
 
@@ -75,11 +76,12 @@ int main(int const argc, char *argv[]) {
     }
     print_debug(cmd);
 
-    // skip empty command
+    /* skip empty command */
     if (strlen(cmd) == 1) {
       continue;
     }
-    // remove new line
+
+    /* remove new line */
     if (cmd[strlen(cmd) - 1] == '\n') {
       cmd[strlen(cmd) - 1] = '\0';
     }
@@ -110,7 +112,7 @@ int main(int const argc, char *argv[]) {
     }
     free(tokens);
 
-    // redirect back to STDOUT after executing command
+    /* redirect back to STDOUT after executing command */
     if (is_redirect == 1) {
       is_redirect = 0;
       if (dup2(fileno(temp_fd), STDOUT_FILENO) == -1) {
@@ -183,11 +185,11 @@ int search_path(char path[], const char *cmd) {
 }
 
 int execute_command(char *tokens[]) {
-  char path[BUFSIZ];
-  if (search_path(path, tokens[0]) == -1) {
-    return -1;
-  }
-
+  /*
+  =============================
+  ===START: BUILT-IN COMMAND===
+  =============================
+  */
   if (strncmp(tokens[0], "exit", 4) == 0) {
     exit(EXIT_SUCCESS);
   }
@@ -210,30 +212,92 @@ int execute_command(char *tokens[]) {
     split_line(paths, args, " ");
     update_path(paths);
   }
+  /*
+  ===========================
+  ===END: BUILT-IN COMMAND===
+  ===========================
+  */
 
-  char debug[BUFSIZ];
-  for (int i = 0; tokens[i] != NULL; i++) {
-    sprintf(debug, "%s\n", tokens[i]);
-    print_debug(debug);
+  /*
+  =================================
+  ===START: SETUP SIGNAL HANDLER===
+  =================================
+  */
+  sigset_t blockMask, origMask;
+  struct sigaction saIgnore, saOrigQuit, saOrigInt, saDefault;
+
+  sigemptyset(&blockMask); /* Block SIGCHLD */
+  sigaddset(&blockMask, SIGCHLD);
+  sigprocmask(SIG_BLOCK, &blockMask, &origMask);
+
+  saIgnore.sa_handler = SIG_IGN; /* ignore SIGINT and SIG */
+  saIgnore.sa_flags = 0;
+  sigemptyset(&saIgnore.sa_mask);
+  sigaction(SIGINT, &saIgnore, &saOrigInt);
+  sigaction(SIGQUIT, &saIgnore, &saOrigInt);
+  /*
+  =================================
+  ===END: SETUP SIGNAL HANDLER===
+  =================================
+  */
+
+  /*
+  ======================================
+  ===START: fork() and exec() command===
+  ======================================
+  */
+  char path[BUFSIZ];
+  if (search_path(path, tokens[0]) == -1) {
+    return -1;
   }
-  print_debug(debug);
-  int result = 0;
+
   pid_t child;
-  int child_pid = 0;
+  int status, savedErrno;
   switch (child = fork()) {
   case -1:
     errExit("fork");
   case 0:
-    child_pid = getpid();
-    result = execv(path, tokens);
-  default:
-    waitpid(child, NULL, 0);
-    print_debug("child done\n");
-    if (result == -1) {
-      fprintf(stderr, "ansh: Unknown command: %s\n", tokens[0]);
-      kill(child_pid, SIGTERM);
+    saDefault.sa_handler = SIG_DFL;
+    saDefault.sa_flags = 0;
+    sigemptyset(&saDefault.sa_mask);
+    if (saOrigInt.sa_handler != SIG_IGN) {
+      sigaction(SIGINT, &saDefault, NULL);
     }
+    if (saOrigQuit.sa_handler != SIG_IGN) {
+      sigaction(SIGQUIT, &saDefault, NULL);
+    }
+
+    sigprocmask(SIG_SETMASK, &origMask, NULL);
+
+    execv(path, tokens);
+    fprintf(stderr, "ansh: Unknown command: %s\n", tokens[0]);
+    _exit(127);
+  default:
+    if (waitpid(child, &status, 0) == -1) {
+      return -1;
+    }
+    if (errno != EINTR) {
+      status = -1;
+      break;
+    }
+    print_debug("child done\n");
+
+    return status;
   }
+  /*
+  ======================================
+  ===END: fork() and exec() command===
+  ======================================
+  */
+
+  /* Unblock SIGCHLD, restore dispositions of SIGINT and SIGQUIT */
+  savedErrno = errno;
+
+  sigprocmask(SIG_SETMASK, &origMask, NULL);
+  sigaction(SIGINT, &saOrigInt, NULL);
+  sigaction(SIGQUIT, &saOrigQuit, NULL);
+
+  errno = savedErrno;
 
   return -1;
 }
