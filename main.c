@@ -22,12 +22,6 @@
     exit(EXIT_FAILURE);                                                        \
   } while (0)
 
-/* No fork mode will run the command in the same process */
-int _NOFORK = 0;
-
-/* Execute mode will run hardcode command */
-int _EXEC = 0;
-
 /* Shell will be executed in interactive mode */
 int _INTERACTIVE_MODE = 1;
 
@@ -53,6 +47,7 @@ int main(int const argc, char *argv[]) {
     printf("Welcome to ansh shell, the interactive friendly shell by An\n");
   }
 
+  // file for batch mode
   FILE *file;
   if (_INTERACTIVE_MODE) {
     file = stdin;
@@ -62,6 +57,10 @@ int main(int const argc, char *argv[]) {
       fprintf(stderr, "error: No such file or directory");
     }
   }
+
+  // file for output redirection
+  FILE *output_fd;
+  int is_redirect = 0;
 
   for (;;) {
     char cmd[MAX_CMD_LEN];
@@ -74,6 +73,7 @@ int main(int const argc, char *argv[]) {
       break;
     }
     print_debug(cmd);
+
     // skip empty command
     if (strlen(cmd) == 1) {
       continue;
@@ -81,6 +81,25 @@ int main(int const argc, char *argv[]) {
     // remove new line
     if (cmd[strlen(cmd) - 1] == '\n') {
       cmd[strlen(cmd) - 1] = '\0';
+    }
+
+    char output_file[BUFSIZ];
+    FILE *temp_fd = tmpfile();
+    if (extract_output_file(output_file, cmd) == 0) {
+      is_redirect = 1;
+      output_fd = fopen(output_file, "w");
+      if (output_fd == NULL) {
+        fprintf(stderr, "cannot create file\n");
+        continue;
+      }
+
+      if (dup2(STDOUT_FILENO, fileno(temp_fd)) == -1) {
+        errExit("dup2 1");
+      }
+
+      if (dup2(fileno(output_fd), STDOUT_FILENO) == -1) {
+        errExit("dup2 2");
+      }
     }
 
     char **tokens = calloc(strlen(cmd), sizeof(char **));
@@ -100,6 +119,16 @@ int main(int const argc, char *argv[]) {
       free(tokens[j]);
     }
     free(tokens);
+    if (is_redirect == 1) {
+      is_redirect = 0;
+      if (dup2(fileno(temp_fd), STDOUT_FILENO) == -1) {
+        errExit("dup2 3");
+      }
+    }
+  }
+
+  if (output_fd != NULL) {
+    fclose(output_fd);
   }
 
   if (_INTERACTIVE_MODE == 0) {
