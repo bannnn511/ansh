@@ -4,6 +4,9 @@ init:
 	meson setup builddir
 build:
 	meson compile -C builddir
+build-run:
+	meson compile -C builddir
+	./builddir/ansh
 debug:
 	./builddir/ansh -d
 run:

@@ -33,6 +33,7 @@ void print_simple_prompt(void);
 void print_debug(char *msg);
 void update_path(char **paths);
 int execute_command(char *tokens[]);
+void redirect(FILE *output_fd, FILE *temp_fd);
 
 int main(int const argc, char *argv[]) {
   if (argc > 1) {
@@ -59,7 +60,7 @@ int main(int const argc, char *argv[]) {
   }
 
   // file for output redirection
-  FILE *output_fd;
+  FILE *out;
   int is_redirect = 0;
 
   for (;;) {
@@ -87,19 +88,8 @@ int main(int const argc, char *argv[]) {
     FILE *temp_fd = tmpfile();
     if (extract_output_file(output_file, cmd) == 0) {
       is_redirect = 1;
-      output_fd = fopen(output_file, "w");
-      if (output_fd == NULL) {
-        fprintf(stderr, "cannot create file\n");
-        continue;
-      }
-
-      if (dup2(STDOUT_FILENO, fileno(temp_fd)) == -1) {
-        errExit("dup2 1");
-      }
-
-      if (dup2(fileno(output_fd), STDOUT_FILENO) == -1) {
-        errExit("dup2 2");
-      }
+      out = fopen(output_file, "w");
+      redirect(out, temp_fd);
     }
 
     char **tokens = calloc(strlen(cmd), sizeof(char **));
@@ -119,6 +109,8 @@ int main(int const argc, char *argv[]) {
       free(tokens[j]);
     }
     free(tokens);
+
+    // redirect back to STDOUT after executing command
     if (is_redirect == 1) {
       is_redirect = 0;
       if (dup2(fileno(temp_fd), STDOUT_FILENO) == -1) {
@@ -127,8 +119,8 @@ int main(int const argc, char *argv[]) {
     }
   }
 
-  if (output_fd != NULL) {
-    fclose(output_fd);
+  if (out != NULL) {
+    fclose(out);
   }
 
   if (_INTERACTIVE_MODE == 0) {
@@ -244,4 +236,25 @@ int execute_command(char *tokens[]) {
   }
 
   return -1;
+}
+
+/*
+  redirect will duplicate fd of STDOUT to out. out will be close after
+  sucessfull called to dup2 if temp is not null -> duplicate STDOUNT to temp for
+  later reuse
+*/
+void redirect(FILE *out, FILE *temp) {
+  if (temp != NULL) {
+    if (dup2(STDOUT_FILENO, fileno(temp)) == -1) {
+      errExit("dup2 1");
+    }
+  }
+
+  int output_fd = fileno(out);
+  if (output_fd != STDOUT_FILENO) {
+    if (dup2(output_fd, STDOUT_FILENO) == -1) {
+      errExit("dup2 2");
+    }
+    close(output_fd);
+  }
 }
