@@ -61,7 +61,7 @@ int main(int const argc, char *argv[]) {
   }
 
   /* file for output redirection */
-  FILE *out;
+  FILE *out = NULL;
   int is_redirect = 0;
 
   for (;;) {
@@ -234,7 +234,7 @@ int execute_command(char *tokens[]) {
   saIgnore.sa_flags = 0;
   sigemptyset(&saIgnore.sa_mask);
   sigaction(SIGINT, &saIgnore, &saOrigInt);
-  sigaction(SIGQUIT, &saIgnore, &saOrigInt);
+  sigaction(SIGQUIT, &saIgnore, &saOrigQuit);
   /*
   =================================
   ===END: SETUP SIGNAL HANDLER===
@@ -252,7 +252,7 @@ int execute_command(char *tokens[]) {
   }
 
   pid_t child;
-  int status, savedErrno;
+  int status;
   switch (child = fork()) {
   case -1:
     errExit("fork");
@@ -261,7 +261,7 @@ int execute_command(char *tokens[]) {
     saDefault.sa_flags = 0;
     sigemptyset(&saDefault.sa_mask);
 
-    /* resets the dispositions to SIG_DFL */
+  /* resets the dispositions to SIG_DFL */
     if (saOrigInt.sa_handler != SIG_IGN) {
       sigaction(SIGINT, &saDefault, NULL);
     }
@@ -278,11 +278,11 @@ int execute_command(char *tokens[]) {
     while (waitpid(child, &status, 0) == -1) {
       return -1;
     }
-    /*
-      system calls my report error code EINTR if a signal occured while system
-      call was inprogress
-      -> no error actually occurred -> retries the system call
-      */
+  /*
+    system calls my report error code EINTR if a signal occured while system
+    call was inprogress
+    -> no error actually occurred -> retries the system call
+    */
     if (errno != EINTR) {
       status = -1;
       break;
@@ -298,7 +298,7 @@ int execute_command(char *tokens[]) {
   */
 
   /* Unblock SIGCHLD, restore dispositions of SIGINT and SIGQUIT */
-  savedErrno = errno;
+  const int savedErrno = errno;
 
   sigprocmask(SIG_SETMASK, &origMask, NULL);
   sigaction(SIGINT, &saOrigInt, NULL);
