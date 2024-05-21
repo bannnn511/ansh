@@ -129,3 +129,31 @@ int extract_output_file(char *file_name, const char *cmd) {
 
   return 0;
 }
+
+int parse_inputv2(char **buffers, const char *cmd) {
+  regex_t regex;
+  const char *pattern = "[^ ]+";
+  if (regcomp(&regex, pattern, REG_EXTENDED) != 0) {
+    fprintf(stderr, "could not compile regex");
+    return -1;
+  }
+
+  regmatch_t pmatch[strlen(cmd)];
+  int i;
+  for (i = 0;; i++) {
+    if (regexec(&regex, cmd, strlen(cmd), pmatch, 0))
+      break;
+    const int start = pmatch[0].rm_so;
+    const int end = pmatch[0].rm_eo;
+    char buffer[end - start];
+    strncpy(buffer, cmd + start, end - start);
+    buffer[end - start] = '\0';
+    strncpy(buffers[i], trim(buffer), strlen(buffer) + 1);
+    cmd += end;
+  }
+  buffers[i] = NULL;
+
+  regfree(&regex);
+
+  return i;
+}

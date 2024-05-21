@@ -34,7 +34,7 @@ void print_simple_prompt(void);
 void print_debug(char *msg);
 void update_path(char **paths);
 int execute_command(char *tokens[]);
-void redirect(FILE *output_fd, FILE *temp_fd);
+void redirect(FILE *out, FILE *temp);
 
 int main(int const argc, char *argv[]) {
   if (argc > 1) {
@@ -104,7 +104,7 @@ int main(int const argc, char *argv[]) {
         errExit("calloc");
       }
     }
-    parse_input(tokens, cmd);
+    parse_inputv2(tokens, cmd);
     execute_command(tokens);
 
     for (unsigned long j = 0; j < strlen(cmd); j++) {
@@ -230,7 +230,7 @@ int execute_command(char *tokens[]) {
   sigaddset(&blockMask, SIGCHLD);
   sigprocmask(SIG_BLOCK, &blockMask, &origMask);
 
-  saIgnore.sa_handler = SIG_IGN; /* ignore SIGINT and SIG */
+  saIgnore.sa_handler = SIG_IGN; /* ignore SIGINT and SIGQUIT */
   saIgnore.sa_flags = 0;
   sigemptyset(&saIgnore.sa_mask);
   sigaction(SIGINT, &saIgnore, &saOrigInt);

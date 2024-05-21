@@ -10,10 +10,14 @@
 #define WHT "\x1B[37m"
 #define RESET "\x1B[0m"
 
+#define ARRAY_SIZE(arr) (sizeof((arr)) / sizeof((arr)[0]))
+
+
 /* Debug mode will print prompt to command line */
 extern int _DEBUG;
 
 void print_simple_prompt(void);
 void print_debug(char* msg);
+
 
 #endif //UTILS_H
