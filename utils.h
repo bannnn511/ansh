@@ -14,10 +14,20 @@
 
 
 /* Debug mode will print prompt to command line */
-extern int _DEBUG;
+extern int _VERBOSE;
+#define SHOW_ERROR 1
+#define SHOW_WARNING 2
+
+#define DEBUG(...)\
+if(_VERBOSE && SHOW_ERROR) {\
+printf("Error : %s, %d ",__FUNCTION__, __LINE__);\
+printf("%s",__VA_ARGS__);\
+}\
+else if (_VERBOSE && SHOW_WARNING) {\
+printf("Warning : %s, %d ",__FUNCTION__, __LINE__);\
+printf("%s",__VA_ARGS__);\
+}
 
 void print_simple_prompt(void);
-void print_debug(char* msg);
-
 
 #endif //UTILS_H

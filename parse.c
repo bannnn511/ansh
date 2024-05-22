@@ -18,7 +18,7 @@ int extract_quoted_string(char *buffer, const char *str) {
   if (regexec(&regex, str, 2, pmatch, 0) == 0) {
     const int start = pmatch[0].rm_so;
     const int end = pmatch[0].rm_eo;
-    strncpy(buffer, str + start+1, end - start-2); /* exclude quotes */
+    strncpy(buffer, str + start + 1, end - start - 2); /* exclude quotes */
   } else {
     return -1;
   }
@@ -51,7 +51,8 @@ int split_line(char **tokens, char *cmd, const char *delim) {
   int i = 0;
   while ((token = strsep(&cmd, delim)) != NULL) {
     if (*token == '\0') {
-      continue;;
+      continue;
+      ;
     }
     tokens[i] = trim(token);
     i++;
@@ -78,7 +79,7 @@ int parse_input(char **buffers, const char *cmd) {
     if (extract_quoted_string(args, cmd) != 0) {
       char buffer[20];
       sprintf(buffer, "%s\n", commands[1]);
-      print_debug(cmd_copy);
+      DEBUG(cmd_copy);
 
       return -1;
     }

@@ -1,3 +1,4 @@
+#include "main.h"
 #include "parse.h"
 #include "utils.h"
 #include <ctype.h>
@@ -15,31 +16,10 @@
 #define PATH_MAX 1024 /* max bytes in pathname */
 #endif
 
-#define MAX_CMD_LEN 200
-
-#define errExit(msg)                                                           \
-  do {                                                                         \
-    perror(msg);                                                               \
-    exit(EXIT_FAILURE);                                                        \
-  } while (0)
-
-/* Shell will be executed in interactive mode */
-int _INTERACTIVE_MODE = 1;
-
-/* Array of paths where the shell should look for commands */
-char *SHELL_PATH[BUFSIZ] = {"/bin", "/usr/bin", "/opt/homebrew/bin", NULL};
-
-void print_prompt(void);
-void print_simple_prompt(void);
-void print_debug(char *msg);
-void update_path(char **paths);
-int execute_command(char *tokens[]);
-void redirect(FILE *out, FILE *temp);
-
 int main(int const argc, char *argv[]) {
   if (argc > 1) {
     if (strcmp(argv[1], "-d") == 0) {
-      _DEBUG = 1;
+      _VERBOSE = 2;
     } else {
       _INTERACTIVE_MODE = 0;
     }
@@ -60,8 +40,6 @@ int main(int const argc, char *argv[]) {
     }
   }
 
-  /* file for output redirection */
-  FILE *out = NULL;
   int is_redirect = 0;
 
   for (;;) {
@@ -74,7 +52,7 @@ int main(int const argc, char *argv[]) {
     if (fgets(cmd, MAX_CMD_LEN, file) == NULL) {
       break;
     }
-    print_debug(cmd);
+    DEBUG(cmd);
 
     /* skip empty command */
     if (strlen(cmd) == 1) {
@@ -87,11 +65,10 @@ int main(int const argc, char *argv[]) {
     }
 
     char output_file[BUFSIZ];
-    FILE *temp_fd = tmpfile();
     if (extract_output_file(output_file, cmd) == 0) {
       is_redirect = 1;
-      out = fopen(output_file, "w");
-      redirect(out, temp_fd);
+    } else {
+      strncpy(output_file, " ", 1);
     }
 
     char **tokens = calloc(strlen(cmd), sizeof(char **));
@@ -105,7 +82,7 @@ int main(int const argc, char *argv[]) {
       }
     }
     parse_inputv2(tokens, cmd);
-    execute_command(tokens);
+    execute_command(tokens, is_redirect, output_file);
 
     for (unsigned long j = 0; j < strlen(cmd); j++) {
       free(tokens[j]);
@@ -115,14 +92,7 @@ int main(int const argc, char *argv[]) {
     /* redirect back to STDOUT after executing command */
     if (is_redirect == 1) {
       is_redirect = 0;
-      if (dup2(fileno(temp_fd), STDOUT_FILENO) == -1) {
-        errExit("dup2 3");
-      }
     }
-  }
-
-  if (out != NULL) {
-    fclose(out);
   }
 
   if (_INTERACTIVE_MODE == 0) {
@@ -184,7 +154,7 @@ int search_path(char path[], const char *cmd) {
   return i;
 }
 
-int execute_command(char *tokens[]) {
+int execute_command(char *tokens[], int is_redirect, char out_file[]) {
   /*
   =============================
   ===START: BUILT-IN COMMAND===
@@ -253,6 +223,17 @@ int execute_command(char *tokens[]) {
 
   pid_t child;
   int status;
+
+  /* file for output redirection */
+  FILE *temp_fd = tmpfile();
+  FILE *out = NULL;
+  DEBUG(out_file);
+  if (strncmp(out_file, " ", 1)) {
+    is_redirect = 1;
+    out = fopen(out_file, "w");
+    redirect(out, temp_fd);
+  }
+
   switch (child = fork()) {
   case -1:
     errExit("fork");
@@ -261,7 +242,7 @@ int execute_command(char *tokens[]) {
     saDefault.sa_flags = 0;
     sigemptyset(&saDefault.sa_mask);
 
-  /* resets the dispositions to SIG_DFL */
+    /* resets the dispositions to SIG_DFL */
     if (saOrigInt.sa_handler != SIG_IGN) {
       sigaction(SIGINT, &saDefault, NULL);
     }
@@ -278,16 +259,16 @@ int execute_command(char *tokens[]) {
     while (waitpid(child, &status, 0) == -1) {
       return -1;
     }
-  /*
-    system calls my report error code EINTR if a signal occured while system
-    call was inprogress
-    -> no error actually occurred -> retries the system call
-    */
+    /*
+      system calls may report error code EINTR if
+      a signal occured while system call was inprogress
+      -> no error actually occurred -> retries waitpid()
+      */
     if (errno != EINTR) {
       status = -1;
       break;
     }
-    print_debug("child done\n");
+    DEBUG("child done");
 
     break;
   }
@@ -305,6 +286,16 @@ int execute_command(char *tokens[]) {
   sigaction(SIGQUIT, &saOrigQuit, NULL);
 
   errno = savedErrno;
+
+  if (is_redirect == 1) {
+    if (dup2(fileno(temp_fd), STDOUT_FILENO) == -1) {
+      errExit("dup2 3");
+    }
+  }
+
+  if (out != NULL) {
+    fclose(out);
+  }
 
   return status;
 }
