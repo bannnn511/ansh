@@ -62,37 +62,51 @@ int main(int const argc, char *argv[]) {
     }
 
     /* remove new line */
-    if (input[input_len - 1] == '\n') {
-      input[input_len - 1] = '\0';
-    }
-
-    char output_file[input_len];
-    char cmd[input_len];
-    if (split_output(cmd, output_file, input) == 1) {
-      is_redirect = 1;
-    }
-
-    char **tokens = calloc(strlen(input), sizeof(char **));
-    if (tokens == NULL) {
+    // if (input[input_len - 1] == '\n') {
+    //   input[input_len - 1] = '\0';
+    // }
+    char **split_cmds = calloc(strlen(input), sizeof(char **));
+    if (split_cmds == NULL) {
       errExit("calloc");
     }
-    for (unsigned long i = 0; i < strlen(input); i++) {
-      tokens[i] = calloc(strlen(input), sizeof(char));
-      if (tokens[i] == NULL) {
+    for (int i = 0; i < input_len; i++) {
+      split_cmds[i] = calloc(strlen(input), sizeof(char));
+      if (split_cmds[i] == NULL) {
         errExit("calloc");
       }
     }
-    parse_inputv2(tokens, cmd);
-    execute_command(tokens, is_redirect, output_file);
+    int cmd_counts = split_parallel_cmd(split_cmds, input);
 
-    for (unsigned long j = 0; j < strlen(input); j++) {
-      free(tokens[j]);
-    }
-    free(tokens);
+    for (int i = 0; i < cmd_counts; i++) {
+      char output_file[input_len];
+      char cmd[input_len];
+      if (split_output(cmd, output_file, split_cmds[i]) == 1) {
+        is_redirect = 1;
+      }
+      int cmd_len = strlen(split_cmds[i]);
 
-    /* redirect back to STDOUT after executing command */
-    if (is_redirect == 1) {
-      is_redirect = 0;
+      char **tokens = calloc(cmd_len, sizeof(char **));
+      if (tokens == NULL) {
+        errExit("calloc");
+      }
+      for (int i = 0; i < cmd_len; i++) {
+        tokens[i] = calloc(cmd_len, sizeof(char));
+        if (tokens[i] == NULL) {
+          errExit("calloc");
+        }
+      }
+      parse_inputv2(tokens, cmd);
+      execute_command(tokens, is_redirect, output_file);
+
+      for (int j = 0; j < cmd_len; j++) {
+        free(tokens[j]);
+      }
+      free(tokens);
+
+      /* redirect back to STDOUT after executing command */
+      if (is_redirect == 1) {
+        is_redirect = 0;
+      }
     }
   }
 
@@ -242,7 +256,7 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
     saDefault.sa_flags = 0;
     sigemptyset(&saDefault.sa_mask);
 
-  /* resets the dispositions to SIG_DFL */
+    /* resets the dispositions to SIG_DFL */
     if (saOrigInt.sa_handler != SIG_IGN) {
       sigaction(SIGINT, &saDefault, NULL);
     }
@@ -259,11 +273,11 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
     while (waitpid(child, &status, 0) == -1) {
       return -1;
     }
-  /*
-    system calls may report error code EINTR if
-    a signal occured while system call was inprogress
-    -> no error actually occurred -> retries waitpid()
-    */
+    /*
+      system calls may report error code EINTR if
+      a signal occured while system call was inprogress
+      -> no error actually occurred -> retries waitpid()
+      */
     if (errno != EINTR) {
       status = -1;
       break;
