@@ -43,40 +43,41 @@ int main(int const argc, char *argv[]) {
   int is_redirect = 0;
 
   for (;;) {
-    char cmd[MAX_CMD_LEN];
+    char input[MAX_CMD_LEN];
     if (_INTERACTIVE_MODE == 1) {
       print_prompt();
     }
     fflush(stdout);
 
-    if (fgets(cmd, MAX_CMD_LEN, file) == NULL) {
+    if (fgets(input, MAX_CMD_LEN, file) == NULL) {
       break;
     }
-    DEBUG(cmd);
+    DEBUG(input);
+
+    int input_len = strlen(input);
 
     /* skip empty command */
-    if (strlen(cmd) == 1) {
+    if (input_len == 1) {
       continue;
     }
 
     /* remove new line */
-    if (cmd[strlen(cmd) - 1] == '\n') {
-      cmd[strlen(cmd) - 1] = '\0';
+    if (input[input_len - 1] == '\n') {
+      input[input_len - 1] = '\0';
     }
 
-    char output_file[BUFSIZ];
-    if (extract_output_file(output_file, cmd) == 0) {
+    char output_file[input_len];
+    char cmd[input_len];
+    if (split_output(cmd, output_file, input) == 1) {
       is_redirect = 1;
-    } else {
-      strncpy(output_file, " ", 1);
     }
 
-    char **tokens = calloc(strlen(cmd), sizeof(char **));
+    char **tokens = calloc(strlen(input), sizeof(char **));
     if (tokens == NULL) {
       errExit("calloc");
     }
-    for (unsigned long i = 0; i < strlen(cmd); i++) {
-      tokens[i] = calloc(strlen(cmd), sizeof(char));
+    for (unsigned long i = 0; i < strlen(input); i++) {
+      tokens[i] = calloc(strlen(input), sizeof(char));
       if (tokens[i] == NULL) {
         errExit("calloc");
       }
@@ -84,7 +85,7 @@ int main(int const argc, char *argv[]) {
     parse_inputv2(tokens, cmd);
     execute_command(tokens, is_redirect, output_file);
 
-    for (unsigned long j = 0; j < strlen(cmd); j++) {
+    for (unsigned long j = 0; j < strlen(input); j++) {
       free(tokens[j]);
     }
     free(tokens);
@@ -126,7 +127,7 @@ void print_prompt(void) {
     printf(GRN "ansh-> " RESET);
   } else {
     printf(BLU "/🔒\n" RESET);
-    printf(GRN "ansh->%s" RESET, "");
+    printf(GRN "ansh-> %s" RESET, "");
   }
 
   free(dirs);
@@ -207,7 +208,7 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
   sigaction(SIGQUIT, &saIgnore, &saOrigQuit);
   /*
   =================================
-  ===END: SETUP SIGNAL HANDLER===
+  ===END: SETUP SIGNAL HANDLER=====
   =================================
   */
 
@@ -228,8 +229,7 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
   FILE *temp_fd = tmpfile();
   FILE *out = NULL;
   DEBUG(out_file);
-  if (strncmp(out_file, " ", 1)) {
-    is_redirect = 1;
+  if (is_redirect == 1) {
     out = fopen(out_file, "w");
     redirect(out, temp_fd);
   }
@@ -242,7 +242,7 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
     saDefault.sa_flags = 0;
     sigemptyset(&saDefault.sa_mask);
 
-    /* resets the dispositions to SIG_DFL */
+  /* resets the dispositions to SIG_DFL */
     if (saOrigInt.sa_handler != SIG_IGN) {
       sigaction(SIGINT, &saDefault, NULL);
     }
@@ -259,11 +259,11 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
     while (waitpid(child, &status, 0) == -1) {
       return -1;
     }
-    /*
-      system calls may report error code EINTR if
-      a signal occured while system call was inprogress
-      -> no error actually occurred -> retries waitpid()
-      */
+  /*
+    system calls may report error code EINTR if
+    a signal occured while system call was inprogress
+    -> no error actually occurred -> retries waitpid()
+    */
     if (errno != EINTR) {
       status = -1;
       break;

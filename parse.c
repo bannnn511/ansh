@@ -51,8 +51,7 @@ int split_line(char **tokens, char *cmd, const char *delim) {
   int i = 0;
   while ((token = strsep(&cmd, delim)) != NULL) {
     if (*token == '\0') {
-      continue;
-      ;
+      continue;;
     }
     tokens[i] = trim(token);
     i++;
@@ -105,9 +104,9 @@ int parse_input(char **buffers, const char *cmd) {
   return i;
 }
 
-int extract_output_file(char *file_name, const char *cmd) {
+int split_output(char *cmd, char *file_name, const char *input) {
   regex_t regex;
-  const char *pattern = ">([^>]+)";
+  const char *pattern = "([^>]+)";
 
   if (regcomp(&regex, pattern, REG_EXTENDED) != 0) {
     fprintf(stderr, "could not compile regex");
@@ -115,23 +114,36 @@ int extract_output_file(char *file_name, const char *cmd) {
   }
 
   regmatch_t pmatch[2];
-  if (regexec(&regex, cmd, 2, pmatch, 0) == 0) {
+  if (regexec(&regex, input, 2, pmatch, 0) == 0) {
     const int start = pmatch[0].rm_so;
     const int end = pmatch[0].rm_eo;
     char buffer[end - start];
-    strncpy(buffer, cmd + start + 1, end - start + 1);
-    buffer[end - start] = '\0';
-    strncpy(file_name, trim(buffer), strlen(buffer) + 1);
+    strncpy(buffer, input + start, end - start);
+    strncpy(cmd, trim(buffer), strlen(buffer));
+    cmd[end - start] = '\0';
+    input += end;
   } else {
     return -1;
   }
 
+  if (regexec(&regex, input, 2, pmatch, 0) == 0) {
+    const int start = pmatch[0].rm_so;
+    const int end = pmatch[0].rm_eo;
+    char buffer[end - start];
+    strncpy(buffer, input + start + 1, end - start + 1);
+    buffer[end - start] = '\0';
+    strncpy(file_name, trim(buffer), strlen(buffer) + 1);
+  } else {
+    regfree(&regex);
+    return 0;
+  }
+
   regfree(&regex);
 
-  return 0;
+  return 1;
 }
 
-int parse_inputv2(char **buffers, const char *cmd) {
+int parse_inputv2(char **buffers, const char *input) {
   regex_t regex;
   const char *pattern = "[^ ]+";
   if (regcomp(&regex, pattern, REG_EXTENDED) != 0) {
@@ -139,18 +151,18 @@ int parse_inputv2(char **buffers, const char *cmd) {
     return -1;
   }
 
-  regmatch_t pmatch[strlen(cmd)];
+  regmatch_t pmatch[strlen(input)];
   int i;
   for (i = 0;; i++) {
-    if (regexec(&regex, cmd, strlen(cmd), pmatch, 0))
+    if (regexec(&regex, input, strlen(input), pmatch, 0))
       break;
     const int start = pmatch[0].rm_so;
     const int end = pmatch[0].rm_eo;
     char buffer[end - start];
-    strncpy(buffer, cmd + start, end - start);
+    strncpy(buffer, input + start, end - start);
     buffer[end - start] = '\0';
     strncpy(buffers[i], trim(buffer), strlen(buffer) + 1);
-    cmd += end;
+    input += end;
   }
   buffers[i] = NULL;
 
