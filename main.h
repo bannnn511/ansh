@@ -23,6 +23,7 @@ void print_debug(char* msg);
 void update_path(char** paths);
 int execute_command(char* tokens[],int is_redirect, char out[]);
 void redirect(FILE* out, FILE* temp);
+void *parse_execute(void *ptr);
 
 
 #endif // MAIN_H

@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,8 +41,6 @@ int main(int const argc, char *argv[]) {
     }
   }
 
-  int is_redirect = 0;
-
   for (;;) {
     char input[MAX_CMD_LEN];
     if (_INTERACTIVE_MODE == 1) {
@@ -61,14 +60,11 @@ int main(int const argc, char *argv[]) {
       continue;
     }
 
-    /* remove new line */
-    // if (input[input_len - 1] == '\n') {
-    //   input[input_len - 1] = '\0';
-    // }
     char **split_cmds = calloc(strlen(input), sizeof(char **));
     if (split_cmds == NULL) {
       errExit("calloc");
     }
+
     for (int i = 0; i < input_len; i++) {
       split_cmds[i] = calloc(strlen(input), sizeof(char));
       if (split_cmds[i] == NULL) {
@@ -77,35 +73,18 @@ int main(int const argc, char *argv[]) {
     }
     int cmd_counts = split_parallel_cmd(split_cmds, input);
 
+    char debug[20];
+    sprintf(debug, "command counts: %d\n", cmd_counts);
+    DEBUG(debug);
+
+    pthread_t threads[cmd_counts];
     for (int i = 0; i < cmd_counts; i++) {
-      char output_file[input_len];
-      char cmd[input_len];
-      if (split_output(cmd, output_file, split_cmds[i]) == 1) {
-        is_redirect = 1;
-      }
-      int cmd_len = strlen(split_cmds[i]);
+      pthread_create(&threads[i], NULL, parse_execute, split_cmds[i]);
+    }
 
-      char **tokens = calloc(cmd_len, sizeof(char **));
-      if (tokens == NULL) {
-        errExit("calloc");
-      }
-      for (int i = 0; i < cmd_len; i++) {
-        tokens[i] = calloc(cmd_len, sizeof(char));
-        if (tokens[i] == NULL) {
-          errExit("calloc");
-        }
-      }
-      parse_inputv2(tokens, cmd);
-      execute_command(tokens, is_redirect, output_file);
-
-      for (int j = 0; j < cmd_len; j++) {
-        free(tokens[j]);
-      }
-      free(tokens);
-
-      /* redirect back to STDOUT after executing command */
-      if (is_redirect == 1) {
-        is_redirect = 0;
+    for (int i = 0; i < cmd_counts; i++) {
+      if (pthread_join(threads[i], NULL) != 0) {
+        errExit("pthread_join");
       }
     }
   }
@@ -333,4 +312,38 @@ void redirect(FILE *out, FILE *temp) {
     }
     close(output_fd);
   }
+}
+
+void *parse_execute(void *ptr) {
+  int is_redirect = 0;
+
+  const char *input = (char *)ptr;
+  int input_len = strlen(input);
+
+  char output_file[input_len];
+  char cmd[input_len];
+  if (split_output(cmd, output_file, input) == 1) {
+    is_redirect = 1;
+  }
+  const int cmd_len = strlen(input);
+
+  char **tokens = calloc(cmd_len, sizeof(char **));
+  if (tokens == NULL) {
+    errExit("calloc");
+  }
+  for (int i = 0; i < cmd_len; i++) {
+    tokens[i] = calloc(cmd_len, sizeof(char));
+    if (tokens[i] == NULL) {
+      errExit("calloc");
+    }
+  }
+  parse_inputv2(tokens, cmd);
+  execute_command(tokens, is_redirect, output_file);
+
+  for (int j = 0; j < cmd_len; j++) {
+    free(tokens[j]);
+  }
+  free(tokens);
+
+  return NULL;
 }
