@@ -1,7 +1,6 @@
 #include "main.h"
 #include "parse.h"
 #include "utils.h"
-#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <pthread.h>
@@ -18,6 +17,7 @@
 #endif
 
 int main(int const argc, char *argv[]) {
+  // _VERBOSE = 1;
   if (argc > 1) {
     if (strcmp(argv[1], "-d") == 0) {
       _VERBOSE = 2;
@@ -35,12 +35,25 @@ int main(int const argc, char *argv[]) {
   if (_INTERACTIVE_MODE) {
     file = stdin;
   } else {
+    _BATCH_MODE = 1;
+    DEBUG(argv[1]);
     file = fopen(argv[1], "r");
     if (file == NULL) {
-      fprintf(stderr, "error: No such file or directory");
+      char current_dir[PATH_MAX];
+      if (getcwd(current_dir, PATH_MAX) == NULL) {
+        fprintf(stderr, "get directory failed\n");
+      }
+      snprintf(current_dir, BUFSIZ, "%s/%s", current_dir, argv[1]);
+      DEBUG(current_dir);
+      file = fopen(current_dir, "r");
+      if (file == NULL) {
+        print_error_message();
+        exit(EXIT_FAILURE);
+      }
     }
   }
 
+  int loop_count = 0;
   for (;;) {
     char input[MAX_CMD_LEN];
     if (_INTERACTIVE_MODE == 1) {
@@ -49,11 +62,16 @@ int main(int const argc, char *argv[]) {
     fflush(stdout);
 
     if (fgets(input, MAX_CMD_LEN, file) == NULL) {
+      /* file is empty */
+      if (loop_count == 0) {
+        print_error_message();
+        exit(EXIT_FAILURE);
+      }
       break;
     }
     DEBUG(input);
 
-    int input_len = strlen(input);
+    const int input_len = strlen(input);
 
     /* skip empty command */
     if (input_len == 1) {
@@ -71,7 +89,7 @@ int main(int const argc, char *argv[]) {
         errExit("calloc");
       }
     }
-    int cmd_counts = split_parallel_cmd(split_cmds, input);
+    const int cmd_counts = split_parallel_cmd(split_cmds, input);
 
     char debug[20];
     sprintf(debug, "command counts: %d\n", cmd_counts);
@@ -87,6 +105,7 @@ int main(int const argc, char *argv[]) {
         errExit("pthread_join");
       }
     }
+    loop_count++;
   }
 
   if (_INTERACTIVE_MODE == 0) {
@@ -126,15 +145,6 @@ void print_prompt(void) {
   free(dirs);
 }
 
-/* Overwrite the SHELL_PATH lookup with paths */
-void update_path(char **paths) {
-  *SHELL_PATH = NULL;
-  for (char **path = paths; *path; path++) {
-    *SHELL_PATH = *path;
-    (*SHELL_PATH)++;
-  }
-}
-
 int search_path(char path[], const char *cmd) {
   int i = 0;
   while (SHELL_PATH[i] != NULL) {
@@ -145,46 +155,77 @@ int search_path(char path[], const char *cmd) {
     i++;
   }
 
-  return i;
+  return -1;
 }
 
-int execute_command(char *tokens[], int is_redirect, char out_file[]) {
+int execute_command(char *tokens[], const int is_redirect, char out_file[]) {
+  // count tokens
+  size_t numTokens = 0;
+  while (tokens[numTokens] != NULL) {
+    numTokens++;
+  }
+
   /*
   =============================
   ===START: BUILT-IN COMMAND===
   =============================
   */
   if (strncmp(tokens[0], "exit", 4) == 0) {
+    if (tokens[1] != NULL) {
+      print_error_message();
+      return 0;
+    }
     exit(EXIT_SUCCESS);
   }
 
   if (strncmp(tokens[0], "cd", 2) == 0) {
     char *dir = tokens[1];
-    if (*dir == '\0') {
-      fprintf(stderr, "cd: missing operand\n");
-      return -1;
+    if (tokens[2] != NULL) {
+      print_error_message();
+      return 0;
     }
 
+    if (dir == NULL) {
+      print_error_message();
+      return 0;
+    }
+
+    // if (dir == NULL) {
+    //   dir = getenv("HOME");
+    // }
+
     if (chdir(trim(dir)) == -1) {
-      perror("chdir");
+      char current_dir[PATH_MAX];
+      if (getcwd(current_dir, PATH_MAX) == NULL) {
+        fprintf(stderr, "get directory failed\n");
+      }
+      snprintf(current_dir, BUFSIZ, "%s/%s", trim(current_dir), dir);
+      if (chdir(current_dir) == -1) {
+        print_error_message();
+        return 0;
+      }
+    } else {
+      return 0;
     }
   }
 
   if (strncmp(tokens[0], "path", 4) == 0) {
-    char **paths = calloc(BUFSIZ, sizeof(char *));
-    char *args = tokens[0] + 5;
-    split_line(paths, args, " ");
-    update_path(paths);
+    if (tokens[1] == NULL) {
+      SHELL_PATH[0] = NULL;
+      return 0;
+    }
+    SHELL_PATH[0] = NULL;
+    size_t i = 0;
+    for (i = 0; i < numTokens - 1; i++)
+      SHELL_PATH[i] = strdup(tokens[i + 1]);
+    SHELL_PATH[i + 1] = NULL;
+
+    return 0;
   }
-  /*
-  ===========================
-  ===END: BUILT-IN COMMAND===
-  ===========================
-  */
 
   /*
   =================================
-  ===START: SETUP SIGNAL HANDLER===
+  =====SETUP SIGNAL HANDLER========
   =================================
   */
   sigset_t blockMask, origMask;
@@ -199,11 +240,6 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
   sigemptyset(&saIgnore.sa_mask);
   sigaction(SIGINT, &saIgnore, &saOrigInt);
   sigaction(SIGQUIT, &saIgnore, &saOrigQuit);
-  /*
-  =================================
-  ===END: SETUP SIGNAL HANDLER=====
-  =================================
-  */
 
   /*
   ======================================
@@ -212,6 +248,7 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
   */
   char path[BUFSIZ];
   if (search_path(path, tokens[0]) == -1) {
+    print_error_message();
     return -1;
   }
 
@@ -221,9 +258,12 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
   /* file for output redirection */
   FILE *temp_fd = tmpfile();
   FILE *out = NULL;
-  DEBUG(out_file);
+  // DEBUG(out_file);
   if (is_redirect == 1) {
-    out = fopen(out_file, "w");
+    out = fopen(out_file, "w+");
+    if (out == NULL) {
+      errExit("fopen");
+    }
     redirect(out, temp_fd);
   }
 
@@ -235,7 +275,7 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
     saDefault.sa_flags = 0;
     sigemptyset(&saDefault.sa_mask);
 
-    /* resets the dispositions to SIG_DFL */
+  /* resets the dispositions to SIG_DFL */
     if (saOrigInt.sa_handler != SIG_IGN) {
       sigaction(SIGINT, &saDefault, NULL);
     }
@@ -252,11 +292,11 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
     while (waitpid(child, &status, 0) == -1) {
       return -1;
     }
-    /*
-      system calls may report error code EINTR if
-      a signal occured while system call was inprogress
-      -> no error actually occurred -> retries waitpid()
-      */
+  /*
+    system calls may report error code EINTR if
+    a signal occured while system call was inprogress
+    -> no error actually occurred -> retries waitpid()
+    */
     if (errno != EINTR) {
       status = -1;
       break;
@@ -265,11 +305,6 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
 
     break;
   }
-  /*
-  ======================================
-  ===END: fork() and exec() command===
-  ======================================
-  */
 
   /* Unblock SIGCHLD, restore dispositions of SIGINT and SIGQUIT */
   const int savedErrno = errno;
@@ -299,31 +334,45 @@ int execute_command(char *tokens[], int is_redirect, char out_file[]) {
   later reuse
 */
 void redirect(FILE *out, FILE *temp) {
+  // Flush the output stream to ensure no data is lost during redirection
+  fflush(stdout);
+
   if (temp != NULL) {
     if (dup2(STDOUT_FILENO, fileno(temp)) == -1) {
       errExit("dup2 1");
     }
   }
 
-  int output_fd = fileno(out);
+  const int output_fd = fileno(out);
   if (output_fd != STDOUT_FILENO) {
     if (dup2(output_fd, STDOUT_FILENO) == -1) {
       errExit("dup2 2");
     }
-    close(output_fd);
+    if (close(output_fd) == -1) {
+      errExit("close");
+    }
   }
 }
+
 
 void *parse_execute(void *ptr) {
   int is_redirect = 0;
 
   const char *input = (char *)ptr;
-  int input_len = strlen(input);
+  const int input_len = strlen(input);
+  if (input_len == 0) {
+    return NULL;
+  }
+  // trim input
 
   char output_file[input_len];
   char cmd[input_len];
-  if (split_output(cmd, output_file, input) == 1) {
+  const int split_status = split_output(cmd, output_file, input);
+  if (split_status == 1) {
     is_redirect = 1;
+  } else if (split_status == -1) {
+    fprintf(stderr, "An error has occurred\n");
+    return NULL;
   }
   const int cmd_len = strlen(input);
 

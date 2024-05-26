@@ -14,16 +14,18 @@
 /* Shell will be executed in interactive mode */
 int _INTERACTIVE_MODE = 1;
 
+/* Shell will be executed in batch mode */
+int _BATCH_MODE = 0;
+
 /* Array of paths where the shell should look for commands */
 char* SHELL_PATH[BUFSIZ] = {"/bin", "/usr/bin", "/opt/homebrew/bin", NULL};
 
 void print_prompt(void);
 void print_simple_prompt(void);
 void print_debug(char* msg);
-void update_path(char** paths);
-int execute_command(char* tokens[],int is_redirect, char out[]);
+int execute_command(char* tokens[], int is_redirect, char out[]);
 void redirect(FILE* out, FILE* temp);
-void *parse_execute(void *ptr);
+void* parse_execute(void* ptr);
 
 
 #endif // MAIN_H

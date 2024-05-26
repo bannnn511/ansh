@@ -29,5 +29,6 @@ printf("%s",__VA_ARGS__);\
 }
 
 void print_simple_prompt(void);
+void print_error_message(void);
 
 #endif //UTILS_H

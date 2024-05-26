@@ -1,4 +1,3 @@
-#include "utils.h"
 #include <ctype.h>
 #include <regex.h>
 #include <stdio.h>
@@ -65,7 +64,21 @@ int split_parallel_cmd(char **cmds, const char *input) {
   return i;
 }
 
+/*
+ * split_output will split input into command and file_name
+ * return 0 if file_name is not found
+ * return 1 if file_name is found
+ * return -1 if file_name is not valid
+ */
 int split_output(char *cmd, char *file_name, const char *input) {
+  if (strlen(input) == 0) {
+    return 0;
+  }
+  if (strncmp(input, ">", 1) == 0) {
+    return -1;
+  }
+
+  int status = 0;
   regex_t regex;
   const char *pattern = "[^>]+";
 
@@ -86,22 +99,31 @@ int split_output(char *cmd, char *file_name, const char *input) {
   } else {
     return -1;
   }
+  if (strlen(cmd) == 0) {
+    return -1;
+  }
 
   if (regexec(&regex, input, 2, pmatch, 0) == 0) {
     const int start = pmatch[0].rm_so;
     const int end = pmatch[0].rm_eo;
     char buffer[end - start];
-    strncpy(buffer, input + start + 1, end - start + 1);
+    strncpy(buffer, input + start, end - start + 1);
     buffer[end - start] = '\0';
     strncpy(file_name, trim(buffer), strlen(buffer) + 1);
-  } else {
-    regfree(&regex);
-    return 0;
+    status = 1;
+    input += end;
   }
-
+  // check if file_name has space
+  if (strchr(file_name, ' ') != NULL) {
+    return -1;
+  }
   regfree(&regex);
 
-  return 1;
+  if (strncmp(input, ">", 1) == 0) {
+    return -1;
+  }
+
+  return status;
 }
 
 int parse_inputv2(char **buffers, const char *input) {
