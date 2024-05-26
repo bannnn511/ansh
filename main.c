@@ -218,7 +218,7 @@ int execute_command(char *tokens[], const int is_redirect, char out_file[]) {
     size_t i = 0;
     for (i = 0; i < numTokens - 1; i++)
       SHELL_PATH[i] = strdup(tokens[i + 1]);
-    SHELL_PATH[i + 1] = NULL;
+    SHELL_PATH[i] = NULL;
 
     return 0;
   }
