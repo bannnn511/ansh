@@ -255,18 +255,6 @@ int execute_command(char *tokens[], const int is_redirect, char out_file[]) {
   pid_t child;
   int status;
 
-  /* file for output redirection */
-  FILE *temp_fd = tmpfile();
-  FILE *out = NULL;
-  // DEBUG(out_file);
-  if (is_redirect == 1) {
-    out = fopen(out_file, "w+");
-    if (out == NULL) {
-      errExit("fopen");
-    }
-    redirect(out, temp_fd);
-  }
-
   switch (child = fork()) {
   case -1:
     errExit("fork");
@@ -284,6 +272,15 @@ int execute_command(char *tokens[], const int is_redirect, char out_file[]) {
     }
 
     sigprocmask(SIG_SETMASK, &origMask, NULL);
+
+    FILE *out = NULL;
+    if (is_redirect == 1) {
+      out = fopen(out_file, "w+");
+      if (out == NULL) {
+        errExit("fopen");
+      }
+      redirect(out);
+    }
 
     execv(path, tokens);
     fprintf(stderr, "ansh: Unknown command: %s\n", tokens[0]);
@@ -315,16 +312,6 @@ int execute_command(char *tokens[], const int is_redirect, char out_file[]) {
 
   errno = savedErrno;
 
-  if (is_redirect == 1) {
-    if (dup2(fileno(temp_fd), STDOUT_FILENO) == -1) {
-      errExit("dup2 3");
-    }
-  }
-
-  if (out != NULL) {
-    fclose(out);
-  }
-
   return status;
 }
 
@@ -333,22 +320,16 @@ int execute_command(char *tokens[], const int is_redirect, char out_file[]) {
   sucessfull called to dup2 if temp is not null -> duplicate STDOUNT to temp for
   later reuse
 */
-void redirect(FILE *out, FILE *temp) {
+void redirect(FILE *out) {
   // Flush the output stream to ensure no data is lost during redirection
   fflush(stdout);
-
-  if (temp != NULL) {
-    if (dup2(STDOUT_FILENO, fileno(temp)) == -1) {
-      errExit("dup2 1");
-    }
-  }
 
   const int output_fd = fileno(out);
   if (output_fd != STDOUT_FILENO) {
     if (dup2(output_fd, STDOUT_FILENO) == -1) {
       errExit("dup2 2");
     }
-    if (close(output_fd) == -1) {
+    if (fclose(out) == -1) {
       errExit("close");
     }
   }

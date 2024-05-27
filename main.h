@@ -24,8 +24,7 @@ void print_prompt(void);
 void print_simple_prompt(void);
 void print_debug(char* msg);
 int execute_command(char* tokens[], int is_redirect, char out[]);
-void redirect(FILE* out, FILE* temp);
+void redirect(FILE* out);
 void* parse_execute(void* ptr);
-
 
 #endif // MAIN_H
